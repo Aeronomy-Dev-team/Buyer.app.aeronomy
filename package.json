@@ -7,7 +7,8 @@
     "dev:direct": "next dev -p 3004",
     "build": "next build",
     "start": "next start -p 3004",
-    "lint": "next lint"
+    "lint": "next lint",
+    "migrate:lot-bp101": "npx tsx scripts/migrate-lot-bp101.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^5.0.0",

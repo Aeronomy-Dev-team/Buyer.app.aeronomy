@@ -3,16 +3,19 @@
 import { useState } from 'react'
 import { Calendar, DollarSign, Package, MapPin, CheckCircle2, Eye } from 'lucide-react'
 import Link from 'next/link'
+import { getTypeLabel, getPathwayLabel, getCertificationStatusBadge } from '@/lib/lots/utils'
 
 export interface Lot {
   _id: string
   title: string
   description?: string
-  type: 'spot' | 'forward' | 'contract'
+  type: string
   status: 'draft' | 'published' | 'reserved' | 'sold' | 'cancelled'
   volume: {
     amount: number
     unit: string
+    total?: number
+    available?: number
   }
   pricing: {
     price: number
@@ -27,6 +30,11 @@ export interface Lot {
     standards?: string[]
     ghgReduction?: number
   }
+  pathway?: string
+  feedstockType?: string
+  certifications?: Array<{ scheme: string; status: string; expectedCompletion?: string }>
+  lcaData?: { reductionPercent?: number; totalLifecycleValue?: number }
+  complianceEligibility?: { refueleu?: boolean; corsia?: boolean; ukRtfo?: boolean }
   airlineName?: string
   orgId?: {
     name?: string
@@ -100,20 +108,10 @@ export default function LotCard({ lot, showActions = false, onEdit, onDelete }: 
     }
   }
 
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case 'spot':
-        return 'Spot'
-      case 'forward':
-        return 'Forward'
-      case 'contract':
-        return 'Contract'
-      default:
-        return type
-    }
-  }
-
   const airlineDisplayName = lot.airlineName || lot.orgId?.branding?.brandName || lot.orgId?.name || 'Unknown Airline'
+  const reductionPercent = lot.lcaData?.reductionPercent ?? lot.compliance?.ghgReduction
+  const primaryCert = lot.certifications?.[0]
+  const certBadge = primaryCert ? getCertificationStatusBadge(primaryCert.status) : null
 
   return (
     <div className="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:shadow-md">
@@ -128,6 +126,16 @@ export default function LotCard({ lot, showActions = false, onEdit, onDelete }: 
             <span className="rounded-full bg-primary-100 px-2.5 py-0.5 text-xs font-medium text-primary-700 whitespace-nowrap">
               {getTypeLabel(lot.type)}
             </span>
+            {lot.pathway && (
+              <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-900 whitespace-nowrap">
+                {getPathwayLabel(lot.pathway)}
+              </span>
+            )}
+            {certBadge && (
+              <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ${certBadge.className}`}>
+                {certBadge.label}
+              </span>
+            )}
           </div>
         </div>
 
@@ -161,8 +169,12 @@ export default function LotCard({ lot, showActions = false, onEdit, onDelete }: 
             <Package className="h-5 w-5 mt-0.5 text-slate-400 flex-shrink-0" />
             <div className="min-w-0 flex-1">
               <p className="text-xs text-slate-500 mb-1">Volume</p>
-              <p className="font-semibold text-slate-900 break-words">{formatVolume(lot.volume.amount, lot.volume.unit)}</p>
-              <p className="text-xs text-slate-500 mt-1">Available</p>
+              <p className="font-semibold text-slate-900 break-words">
+                {formatVolume(lot.volume.available ?? lot.volume.total ?? lot.volume.amount, lot.volume.unit)}
+              </p>
+              {(reductionPercent != null && reductionPercent > 0) && (
+                <p className="text-xs text-green-600 mt-1 font-medium">{reductionPercent}% emission reduction</p>
+              )}
             </div>
           </div>
 
