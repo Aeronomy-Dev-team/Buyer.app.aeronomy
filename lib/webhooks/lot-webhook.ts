@@ -1,6 +1,10 @@
 /**
  * Webhook service for sending lot events to external systems (e.g., Producer Dashboard)
+ * BP-101: Webhook payload remains backward compatible — type sent as legacy (spot/forward/contract)
+ * New SAF fields included when present (additive).
  */
+
+import { TYPE_TO_LEGACY } from '@/models/Lot'
 
 export type LotWebhookEvent = 'lot.created' | 'lot.updated' | 'lot.deleted' | 'lot.published'
 
@@ -18,6 +22,8 @@ export interface LotWebhookPayload {
     volume: {
       amount: number
       unit: string
+      total?: number
+      available?: number
     }
     pricing: {
       price: number
@@ -37,6 +43,12 @@ export interface LotWebhookPayload {
       ghgReduction?: number
       sustainabilityScore?: number
     }
+    pathway?: string
+    feedstockType?: string
+    feedstockOrigin?: string
+    certifications?: Array<{ scheme: string; status: string; expectedCompletion?: string }>
+    lcaData?: { reductionPercent?: number; totalLifecycleValue?: number }
+    complianceEligibility?: { refueleu?: boolean; corsia?: boolean; ukRtfo?: boolean }
     tags?: string[]
     airlineName?: string
     publishedAt?: string
@@ -67,7 +79,10 @@ export async function sendLotWebhook(
   const cistWebhookUrl = process.env.CIST_WEBHOOK_URL || 'https://cist.aeronomy.app/api/webhooks/lots'
   const cistWebhookSecret = process.env.CIST_WEBHOOK_SECRET
 
-  // Prepare payload
+  // Map type to legacy for producer portal backward compatibility
+  const webhookType = (lot.type && (TYPE_TO_LEGACY as any)[lot.type]) || lot.type
+
+  // Prepare payload (backward compatible)
   const payload: LotWebhookPayload = {
     event,
     timestamp: new Date().toISOString(),
@@ -77,9 +92,14 @@ export async function sendLotWebhook(
       postedBy: lot.postedBy,
       title: lot.title,
       description: lot.description,
-      type: lot.type,
+      type: webhookType,
       status: lot.status,
-      volume: lot.volume,
+      volume: lot.volume ? {
+        amount: lot.volume.amount,
+        unit: lot.volume.unit,
+        ...(lot.volume.total != null && { total: lot.volume.total }),
+        ...(lot.volume.available != null && { available: lot.volume.available }),
+      } : { amount: 0, unit: 'MT' },
       pricing: lot.pricing,
       delivery: lot.delivery
         ? {
@@ -101,6 +121,18 @@ export async function sendLotWebhook(
             sustainabilityScore: lot.compliance.sustainabilityScore,
           }
         : undefined,
+      ...(lot.pathway && { pathway: lot.pathway }),
+      ...(lot.feedstockType && { feedstockType: lot.feedstockType }),
+      ...(lot.feedstockOrigin && { feedstockOrigin: lot.feedstockOrigin }),
+      ...(lot.certifications?.length && {
+        certifications: lot.certifications.map((c: any) => ({
+          scheme: c.scheme,
+          status: c.status,
+          ...(c.expectedCompletion && { expectedCompletion: new Date(c.expectedCompletion).toISOString() }),
+        })),
+      }),
+      ...(lot.lcaData && { lcaData: { reductionPercent: lot.lcaData.reductionPercent, totalLifecycleValue: lot.lcaData.totalLifecycleValue } }),
+      ...(lot.complianceEligibility && { complianceEligibility: lot.complianceEligibility }),
       tags: lot.tags,
       airlineName: lot.airlineName,
       publishedAt: lot.publishedAt ? new Date(lot.publishedAt).toISOString() : undefined,

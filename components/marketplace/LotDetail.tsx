@@ -1,7 +1,8 @@
 'use client'
 
-import { X, Edit, Trash2, Calendar, MapPin, Tag, FileText, CheckCircle2, AlertCircle, TrendingUp, DollarSign, Package } from 'lucide-react'
+import { X, Edit, Trash2, MapPin, CheckCircle2, TrendingUp, DollarSign, Package } from 'lucide-react'
 import { Lot } from './LotCard'
+import { getTypeLabel, getPathwayLabel, getCertificationStatusBadge } from '@/lib/lots/utils'
 
 interface LotDetailProps {
   lot: Lot
@@ -21,15 +22,6 @@ export default function LotDetail({ lot, onClose, onEdit, onDelete, onPlaceBid, 
       case 'sold': return 'bg-blue-100 text-blue-700'
       case 'cancelled': return 'bg-red-100 text-red-700'
       default: return 'bg-slate-100 text-slate-700'
-    }
-  }
-
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case 'spot': return 'Spot Market'
-      case 'forward': return 'Forward Contract'
-      case 'contract': return 'Long-term Contract'
-      default: return type
     }
   }
 
@@ -117,15 +109,25 @@ export default function LotDetail({ lot, onClose, onEdit, onDelete, onPlaceBid, 
                   <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-bold uppercase tracking-wide">
                     {getTypeLabel(lot.type)}
                   </span>
+                  {(lot as any).pathway && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-900 text-xs font-bold uppercase tracking-wide">
+                      {getPathwayLabel((lot as any).pathway)}
+                    </span>
+                  )}
+                  {(lot as any).certifications?.[0] && (
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${getCertificationStatusBadge((lot as any).certifications[0].status).className}`}>
+                      {getCertificationStatusBadge((lot as any).certifications[0].status).label}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="text-right">
                 <p className="text-3xl font-bold text-slate-900">
-                  {formatPrice(lot.pricing.pricePerUnit || 0, lot.pricing.currency)}
-                  <span className="text-sm font-normal text-slate-500 ml-1">/ {lot.volume.unit}</span>
+                  {formatPrice(lot.pricing?.pricePerUnit || 0, lot.pricing?.currency ?? 'USD')}
+                  <span className="text-sm font-normal text-slate-500 ml-1">/ {lot.volume?.unit ?? ''}</span>
                 </p>
                 <p className="text-sm text-slate-500 mt-1">
-                  Total: {formatPrice(lot.pricing.price, lot.pricing.currency)}
+                  Total: {formatPrice(lot.pricing?.price ?? 0, lot.pricing?.currency ?? 'USD')}
                 </p>
               </div>
             </div>
@@ -148,7 +150,9 @@ export default function LotDetail({ lot, onClose, onEdit, onDelete, onPlaceBid, 
               <div className="bg-white rounded-lg border border-slate-200 p-4 space-y-3 shadow-sm">
                 <div>
                   <p className="text-xs text-slate-500">Available Volume</p>
-                  <p className="font-medium text-slate-900">{lot.volume.amount.toLocaleString()} {lot.volume.unit}</p>
+                  <p className="font-medium text-slate-900">
+                    {(lot.volume?.available ?? lot.volume?.total ?? lot.volume?.amount ?? 0).toLocaleString()} {lot.volume?.unit ?? ''}
+                  </p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-500">Minimum Order</p>
@@ -160,6 +164,47 @@ export default function LotDetail({ lot, onClose, onEdit, onDelete, onPlaceBid, 
                 </div>
               </div>
             </div>
+
+            {/* SAF Details (pathway, feedstock, facility) */}
+            {((lot as any).pathway || (lot as any).productionFacility) && (
+              <div className="space-y-4 sm:col-span-2">
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                  <Package className="h-4 w-4 text-slate-400" />
+                  SAF Product Details
+                </h3>
+                <div className="bg-white rounded-lg border border-slate-200 p-4 space-y-3 shadow-sm">
+                  {(lot as any).pathway && (
+                    <div>
+                      <p className="text-xs text-slate-600 font-medium">Pathway</p>
+                      <p className="font-medium text-slate-900">{getPathwayLabel((lot as any).pathway)}</p>
+                    </div>
+                  )}
+                  {(lot as any).feedstockType && (
+                    <div>
+                      <p className="text-xs text-slate-600 font-medium">Feedstock</p>
+                      <p className="font-medium text-slate-900">{(lot as any).feedstockType}{(lot as any).feedstockOrigin ? ` — ${(lot as any).feedstockOrigin}` : ''}</p>
+                    </div>
+                  )}
+                  {(lot as any).productionFacility && (
+                    <div>
+                      <p className="text-xs text-slate-600 font-medium">Production Facility</p>
+                      <p className="font-medium text-slate-900">{(lot as any).productionFacility.name}, {(lot as any).productionFacility.location}, {(lot as any).productionFacility.country}</p>
+                      <p className="text-xs text-slate-700 mt-1">{(lot as any).productionFacility.capacityMTPerYear?.toLocaleString()} MT/year · Commissioning {new Date((lot as any).productionFacility.commissioningDate).toLocaleDateString()}</p>
+                    </div>
+                  )}
+                  {(lot as any).complianceEligibility && (
+                    <div>
+                      <p className="text-xs text-slate-600 font-medium">Compliance Eligibility</p>
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        {(lot as any).complianceEligibility.refueleu && <span className="px-2 py-0.5 rounded bg-blue-200 text-blue-900 text-xs font-medium">ReFuelEU</span>}
+                        {(lot as any).complianceEligibility.corsia && <span className="px-2 py-0.5 rounded bg-green-200 text-green-900 text-xs font-medium">CORSIA</span>}
+                        {(lot as any).complianceEligibility.ukRtfo && <span className="px-2 py-0.5 rounded bg-amber-200 text-amber-900 text-xs font-medium">UK RTFO</span>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Delivery */}
             <div className="space-y-4">
@@ -202,10 +247,10 @@ export default function LotDetail({ lot, onClose, onEdit, onDelete, onPlaceBid, 
                     <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-green-500 rounded-full"
-                        style={{ width: `${lot.compliance?.ghgReduction || 0}%` }}
+                        style={{ width: `${(lot as any).lcaData?.reductionPercent ?? lot.compliance?.ghgReduction ?? 0}%` }}
                       />
                     </div>
-                    <span className="text-sm font-bold text-green-700">{lot.compliance?.ghgReduction || 0}%</span>
+                    <span className="text-sm font-bold text-green-700">{(lot as any).lcaData?.reductionPercent ?? lot.compliance?.ghgReduction ?? 0}%</span>
                   </div>
                 </div>
                 <div>
@@ -227,11 +272,18 @@ export default function LotDetail({ lot, onClose, onEdit, onDelete, onPlaceBid, 
                 </div>
               </div>
 
-              {lot.compliance?.standards && lot.compliance.standards.length > 0 && (
+              {((lot as any).certifications?.length || lot.compliance?.standards?.length) ? (
                 <div>
-                  <p className="text-xs text-slate-500 mb-2">Certified Standards</p>
+                  <p className="text-xs text-slate-500 mb-2">Certifications</p>
                   <div className="flex flex-wrap gap-2">
-                    {lot.compliance.standards.map((standard: string) => (
+                    {(lot as any).certifications?.map((c: any, i: number) => (
+                      <span key={i} className="px-2 py-1 rounded bg-slate-200 border border-slate-300 text-xs font-medium text-slate-800 flex items-center gap-1">
+                        <AwardIcon standard={c.scheme} />
+                        {c.scheme.replace(/_/g, ' ')} — {c.status.replace('_', ' ')}
+                        {c.expectedCompletion && ` (Expected ${new Date(c.expectedCompletion).toLocaleDateString()})`}
+                      </span>
+                    ))}
+                    {lot.compliance?.standards?.map((standard: string) => (
                       <span key={standard} className="px-2 py-1 rounded bg-slate-100 border border-slate-200 text-xs font-medium text-slate-700 flex items-center gap-1">
                         <AwardIcon standard={standard} />
                         {standard}
@@ -239,7 +291,7 @@ export default function LotDetail({ lot, onClose, onEdit, onDelete, onPlaceBid, 
                     ))}
                   </div>
                 </div>
-              )}
+              ) : null}
             </div>
           </div>
 

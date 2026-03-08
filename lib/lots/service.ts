@@ -1,5 +1,5 @@
 import { Types } from 'mongoose'
-import Lot, { ILot, LotStatus, LotType } from '@/models/Lot'
+import Lot, { ILot, LotStatus, LotType, LEGACY_TYPE_MAP, TYPE_TO_LEGACY } from '@/models/Lot'
 import { resolveUserOrgId } from '@/lib/certificates/service'
 import { resolveMongoUserId } from '@/lib/user-resolver'
 import { notifyLotCreated, notifyLotUpdated, notifyLotDeleted } from '@/lib/webhooks/lot-webhook'
@@ -8,11 +8,15 @@ import Organization from '@/models/Organization'
 
 export interface LotFilters {
   status?: LotStatus
-  type?: LotType
+  type?: LotType | string // accepts both new (spot_volume) and legacy (spot) values
   orgId?: string
   minPrice?: number
   maxPrice?: number
   standards?: string[]
+  pathway?: string
+  certificationStatus?: 'certified' | 'in_progress' | 'not_started'
+  corsiaEligible?: boolean
+  refueleuEligible?: boolean
   search?: string
 }
 
@@ -26,8 +30,13 @@ export async function listLots(filters: LotFilters = {}) {
     query.status = filters.status
   }
 
+  // Type filter: accept both new (spot_volume) and legacy (spot) values for backward compat
   if (filters.type) {
-    query.type = filters.type
+    const typeVal = filters.type as string
+    const typesToMatch: string[] = [typeVal]
+    if (LEGACY_TYPE_MAP[typeVal]) typesToMatch.push(LEGACY_TYPE_MAP[typeVal])
+    else if (typeVal in TYPE_TO_LEGACY) typesToMatch.push((TYPE_TO_LEGACY as any)[typeVal])
+    query.type = typesToMatch.length > 1 ? { $in: typesToMatch } : typeVal
   }
 
   if (filters.orgId) {
@@ -46,6 +55,22 @@ export async function listLots(filters: LotFilters = {}) {
 
   if (filters.standards && filters.standards.length > 0) {
     query['compliance.standards'] = { $in: filters.standards }
+  }
+
+  if (filters.pathway) {
+    query.pathway = filters.pathway
+  }
+
+  if (filters.certificationStatus) {
+    query['certifications.status'] = filters.certificationStatus
+  }
+
+  if (filters.corsiaEligible === true) {
+    query['complianceEligibility.corsia'] = true
+  }
+
+  if (filters.refueleuEligible === true) {
+    query['complianceEligibility.refueleu'] = true
   }
 
   // Build $or conditions for search

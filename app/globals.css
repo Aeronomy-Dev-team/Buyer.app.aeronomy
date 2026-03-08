@@ -30,6 +30,12 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Ensure select dropdown options have visible text (fixes invisible options on some browsers/OS) */
+select option {
+  background-color: white !important;
+  color: #0f172a !important;
+}
+
 
 
 
