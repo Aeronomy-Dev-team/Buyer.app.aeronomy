@@ -1,4 +1,12 @@
 import mongoose, { Schema, Document, Model } from 'mongoose'
+import {
+  CertificationScheme,
+  CertificationStatus,
+  FacilityStatus,
+  FuelPathway,
+  LCAMethodology,
+  ProducerProfile,
+} from './producer-profile.types'
 
 export interface IOrganizationBranding {
   logo?: string
@@ -187,6 +195,7 @@ export interface IOrganization extends Document {
   billingEmail?: string
   plan?: string
   branding?: IOrganizationBranding
+  producerProfile?: ProducerProfile
 
   // Simplified onboarding fields
   userName?: string
@@ -236,6 +245,65 @@ const BrandingSchema = new Schema<IOrganizationBranding>(
   { _id: false }
 )
 
+const ProducerFacilitySchema = new Schema(
+  {
+    name: { type: String, required: true, trim: true },
+    location: { type: String, required: true, trim: true },
+    country: { type: String, required: true, trim: true, maxlength: 2 },
+    capacityMTPerYear: { type: Number, required: true, min: 0 },
+    commissioningDate: { type: Date, required: true },
+    status: {
+      type: String,
+      required: true,
+      enum: Object.values(FacilityStatus),
+      default: FacilityStatus.PLANNED,
+    },
+  },
+  { _id: false }
+)
+
+const ProducerCertificationSchema = new Schema(
+  {
+    scheme: {
+      type: String,
+      required: true,
+      enum: Object.values(CertificationScheme),
+    },
+    status: {
+      type: String,
+      required: true,
+      enum: Object.values(CertificationStatus),
+      default: CertificationStatus.PENDING,
+    },
+    certificationBody: { type: String, required: true, trim: true },
+    expectedCompletion: { type: String, trim: true },
+    certificateId: { type: String, trim: true },
+    validUntil: { type: Date },
+  },
+  { _id: false }
+)
+
+const ProducerProfileSchema = new Schema(
+  {
+    pathways: {
+      type: [String],
+      enum: Object.values(FuelPathway),
+      default: [],
+    },
+    feedstocks: { type: [String], default: [] },
+    facilities: { type: [ProducerFacilitySchema], default: [] },
+    certifications: { type: [ProducerCertificationSchema], default: [] },
+    totalAvailableVolume: { type: Number, default: 0, min: 0 },
+    deliveryReadiness: { type: String, default: 'planned' },
+    lcaMethodology: {
+      type: String,
+      enum: Object.values(LCAMethodology),
+      default: LCAMethodology.CORSIA_DEFAULT,
+    },
+  },
+  { _id: false }
+)
+
 const OrganizationSchema: Schema<IOrganization> = new Schema(
   {
     name: { type: String, required: true, trim: true },
@@ -243,6 +311,10 @@ const OrganizationSchema: Schema<IOrganization> = new Schema(
     billingEmail: { type: String, trim: true, lowercase: true },
     plan: { type: String, trim: true },
     branding: { type: BrandingSchema, default: undefined },
+    producerProfile: {
+      type: ProducerProfileSchema,
+      default: undefined,
+    },
 
     // Simplified onboarding fields
     userName: { type: String, trim: true },

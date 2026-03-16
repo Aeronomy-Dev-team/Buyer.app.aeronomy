@@ -180,23 +180,22 @@ export default function OnboardingWizard() {
             })
 
             if (completeRes.ok) {
-                // Send welcome confirmation email (non-blocking)
-                try {
-                    await fetch('/api/auth/welcome-email', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            email: formData.companyEmail,
-                            userName: formData.name,
-                            companyName: formData.companyName,
-                        }),
-                    })
-                } catch (emailError) {
-                    // Don't block navigation if email fails
+                // Redirect immediately after onboarding completion so optional follow-up
+                // requests like welcome email cannot block navigation.
+                void fetch('/api/auth/welcome-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: formData.companyEmail,
+                        userName: formData.name,
+                        companyName: formData.companyName,
+                    }),
+                }).catch((emailError) => {
                     console.error('Failed to send welcome email:', emailError)
-                }
+                })
 
-                router.push('/dashboard')
+                window.location.replace('/dashboard')
+                return
             } else {
                 throw new Error('Failed to complete onboarding')
             }
