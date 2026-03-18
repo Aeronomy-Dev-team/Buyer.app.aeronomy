@@ -43,7 +43,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // 4. Fetch — .select() limits exposure, .lean() for performance
     const organization = await Organization.findById(orgId)
-      .select("name orgType producerProfile")
+      .select("name type producerProfile")
       .lean();
 
     // 5. Validate producer
@@ -54,8 +54,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
     const isProducer =
-    organization.orgType === "producer" ||
-    organization.orgType === "both";
+    organization.type === "producer";
 
   if (!isProducer) {
     return NextResponse.json(
@@ -77,7 +76,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   return NextResponse.json({
     orgId: organization._id.toString(),
     name: organization.name,
-    orgType: organization.orgType,
+    orgType: organization.type,
     producerProfile: organization.producerProfile || defaultProfile,
   });
 } catch (error) {
