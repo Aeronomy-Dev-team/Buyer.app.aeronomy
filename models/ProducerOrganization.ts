@@ -1,4 +1,5 @@
 import mongoose, { Document, Model, Schema } from 'mongoose'
+import type { ProducerOrganizationProfile } from './producer-organization-profile.types'
 
 export interface IProducerOrganization extends Document {
   organizationId: string
@@ -15,6 +16,8 @@ export interface IProducerOrganization extends Document {
     phone: string
   }
   source: string
+  /** Buyer-facing normalized profile from producer portal (profileVersion: buyer-portal-v2) */
+  profile?: ProducerOrganizationProfile
   updatedAt: Date
   createdAt: Date
   lastSyncedAt: Date
@@ -73,6 +76,7 @@ const ProducerOrganizationSchema: Schema<IProducerOrganization> = new Schema(
       default: 'producer-dashboard',
       trim: true,
     },
+    profile: { type: Schema.Types.Mixed },
     updatedAt: {
       type: Date,
       default: Date.now,
