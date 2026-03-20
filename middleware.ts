@@ -23,8 +23,8 @@ export default clerkMiddleware((auth, request) => {
 
 export const config = {
   matcher: [
-    // Skip Next.js internals and all static files, unless found in search params
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|mp4|webm|mov|avi|mp3|wav|ogg)).*)',
+    // Skip everything under /_next/ (static, HMR, RSC) and common static files — auth here breaks CSS/JS loads
+    '/((?!_next/|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|mp4|webm|mov|avi|mp3|wav|ogg)).*)',
     // Always run for API routes
     '/(api|trpc)(.*)',
   ],

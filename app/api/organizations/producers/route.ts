@@ -44,31 +44,36 @@ export async function GET(request: NextRequest) {
       .lean()
 
     const syncedProducers = await ProducerOrganization.find(syncedQuery)
-      .select('organizationId companyName legalName registrationNumber vatNumber address website onboardingComplete primaryContact source updatedAt createdAt lastSyncedAt')
+      .select('organizationId companyName legalName registrationNumber vatNumber address website onboardingComplete primaryContact source profile updatedAt createdAt lastSyncedAt')
       .sort({ lastSyncedAt: -1, createdAt: -1 })
       .lean()
 
     const normalizedProducers = [
-      ...syncedProducers.map((producer) => ({
-        _id: producer._id.toString(),
-        organizationId: producer.organizationId,
-        name: producer.companyName || producer.legalName || 'Unnamed Producer',
-        legalName: producer.legalName,
-        companyEmail: producer.primaryContact?.email || '',
-        userName: producer.primaryContact?.name || '',
-        organizationType: 'producer',
-        teamSize: '',
-        volumeRange: '',
-        address: producer.address,
-        website: producer.website,
-        registrationNumber: producer.registrationNumber,
-        vatNumber: producer.vatNumber,
-        onboardingComplete: producer.onboardingComplete,
-        primaryContact: producer.primaryContact,
-        source: producer.source || 'producer-dashboard',
-        syncedAt: producer.lastSyncedAt || producer.updatedAt || producer.createdAt,
-        createdAt: producer.createdAt,
-      })),
+      ...syncedProducers.map((producer) => {
+        const p = producer.profile
+        const legal = p?.legalIdentity
+        return {
+          _id: producer._id.toString(),
+          organizationId: producer.organizationId,
+          name: producer.companyName || legal?.organizationName || legal?.displayName || producer.legalName || 'Unnamed Producer',
+          legalName: producer.legalName || legal?.legalEntityName,
+          companyEmail: producer.primaryContact?.email || legal?.primaryContactEmail || '',
+          userName: producer.primaryContact?.name || legal?.primaryContactName || '',
+          organizationType: p?.legalIdentity?.orgType || 'producer',
+          teamSize: '',
+          volumeRange: '',
+          address: producer.address || legal?.businessAddress,
+          website: producer.website || legal?.website,
+          registrationNumber: producer.registrationNumber,
+          vatNumber: producer.vatNumber,
+          onboardingComplete: producer.onboardingComplete,
+          primaryContact: producer.primaryContact || (legal ? { name: legal.primaryContactName, email: legal.primaryContactEmail, phone: '' } : undefined),
+          source: producer.source || 'producer-dashboard',
+          syncedAt: producer.lastSyncedAt || producer.updatedAt || producer.createdAt,
+          createdAt: producer.createdAt,
+          profile: producer.profile,
+        }
+      }),
       ...organizationProducers.map((producer) => ({
         _id: producer._id.toString(),
         organizationId: producer._id.toString(),
@@ -96,22 +101,9 @@ export async function GET(request: NextRequest) {
       })),
     ]
 
-    console.log('[producers api] Returning producer profiles', {
-      buyerPortalCount: organizationProducers.length,
-      syncedProducerCount: syncedProducers.length,
-      totalCount: normalizedProducers.length,
-      search: search || '',
-    })
-
     return NextResponse.json({
       producers: normalizedProducers,
       count: normalizedProducers.length,
-      debug: {
-        buyerPortalCount: organizationProducers.length,
-        syncedProducerCount: syncedProducers.length,
-        totalCount: normalizedProducers.length,
-        search: search || '',
-      },
     })
   } catch (error: any) {
     console.error('Error fetching producers:', error)

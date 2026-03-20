@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { validateInterDashboardAuth } from '@/lib/jwt'
 import connectDB from '@/lib/mongodb'
 import ProducerOrganization from '@/models/ProducerOrganization'
+import type { ProducerOrganizationProfile } from '@/models/producer-organization-profile.types'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,6 +24,8 @@ type ProducerOrganizationWebhookBody = {
     }
     updatedAt?: string
   }
+  /** Buyer-facing normalized profile (profileVersion: buyer-portal-v2) */
+  profile?: ProducerOrganizationProfile
 }
 
 export async function GET() {
@@ -91,46 +94,56 @@ export async function POST(request: NextRequest) {
     }
 
     const org = body.organization
-    if (!org?.organizationId) {
-      return NextResponse.json({ error: 'organizationId is required' }, { status: 400 })
+    const profile = body.profile
+    const organizationId = org?.organizationId ?? profile?.orgId
+    if (!organizationId) {
+      return NextResponse.json({ error: 'organizationId or profile.orgId is required' }, { status: 400 })
     }
 
     await connectDB()
 
+    const effectiveOrgId = org?.organizationId ?? organizationId
+
     console.log('[producer-organization webhook] Processing organization sync', {
       event: body.event,
-      organizationId: org.organizationId,
-      companyName: org.companyName ?? '',
-      contactEmail: org.primaryContact?.email ?? '',
-      onboardingComplete: Boolean(org.onboardingComplete),
-      updatedAt: org.updatedAt ?? null,
+      organizationId: effectiveOrgId,
+      companyName: org?.companyName ?? profile?.legalIdentity?.organizationName ?? '',
+      contactEmail: org?.primaryContact?.email ?? profile?.legalIdentity?.primaryContactEmail ?? '',
+      onboardingComplete: Boolean(org?.onboardingComplete),
+      hasProfile: Boolean(profile),
+      updatedAt: org?.updatedAt ?? profile?.metadata?.updatedAt ?? null,
     })
 
+    const legalIdentity = profile?.legalIdentity
     const existingRecord = await ProducerOrganization.findOne({
-      organizationId: org.organizationId,
+      organizationId: effectiveOrgId,
     }).lean()
 
-    const record = await ProducerOrganization.findOneAndUpdate(
-      { organizationId: org.organizationId },
-      {
-        $set: {
-          companyName: org.companyName ?? '',
-          legalName: org.legalName ?? '',
-          registrationNumber: org.registrationNumber ?? '',
-          vatNumber: org.vatNumber ?? '',
-          address: org.address ?? '',
-          website: org.website ?? '',
-          onboardingComplete: Boolean(org.onboardingComplete),
-          primaryContact: {
-            name: org.primaryContact?.name ?? '',
-            email: org.primaryContact?.email ?? '',
-            phone: org.primaryContact?.phone ?? '',
-          },
-          updatedAt: org.updatedAt ? new Date(org.updatedAt) : new Date(),
-          source,
-          lastSyncedAt: new Date(),
-        },
+    const updatePayload: Record<string, unknown> = {
+      organizationId: effectiveOrgId,
+      companyName: org?.companyName ?? legalIdentity?.organizationName ?? legalIdentity?.displayName ?? '',
+      legalName: org?.legalName ?? legalIdentity?.legalEntityName ?? '',
+      registrationNumber: org?.registrationNumber ?? '',
+      vatNumber: org?.vatNumber ?? '',
+      address: org?.address ?? legalIdentity?.businessAddress ?? '',
+      website: org?.website ?? legalIdentity?.website ?? '',
+      onboardingComplete: Boolean(org?.onboardingComplete ?? true),
+      primaryContact: {
+        name: org?.primaryContact?.name ?? legalIdentity?.primaryContactName ?? '',
+        email: org?.primaryContact?.email ?? legalIdentity?.primaryContactEmail ?? '',
+        phone: org?.primaryContact?.phone ?? '',
       },
+      updatedAt: org?.updatedAt ? new Date(org.updatedAt) : profile?.metadata?.updatedAt ? new Date(profile.metadata.updatedAt) : new Date(),
+      source,
+      lastSyncedAt: new Date(),
+    }
+    if (profile && typeof profile === 'object') {
+      updatePayload.profile = profile
+    }
+
+    const record = await ProducerOrganization.findOneAndUpdate(
+      { organizationId: effectiveOrgId },
+      { $set: updatePayload },
       {
         upsert: true,
         new: true,
@@ -149,12 +162,6 @@ export async function POST(request: NextRequest) {
       success: true,
       event: body.event,
       organizationId: record.organizationId,
-      debug: {
-        source,
-        authMethod: auth.method,
-        operation: existingRecord ? 'updated' : 'created',
-        lastSyncedAt: record.lastSyncedAt,
-      },
     })
   } catch (error) {
     console.error('Error processing producer organization webhook:', error)
